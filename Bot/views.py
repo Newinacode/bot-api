@@ -11,6 +11,17 @@ from datetime import datetime
 rank_avi = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,8,8,4,2,2,1]
 
 
+
+
+def check_rank_avl(rank): 
+    if rank>11:
+        user1 = UserDetail.objects.filter(rank=rank)
+        return user1.count()<rank_avi[rank]
+    return True
+
+
+
+
 @api_view(['GET'])
 def list(request):
     queryset = UserDetail.objects.all()
@@ -34,20 +45,28 @@ def update(request):
         'promote':1, 
         'demote':-1
     }
-    request_user = request.data["request_user"]
-    base_user = request.data["base_user"]
-    task = request.data["task"]
-    user1 = UserDetail.objects.get(pk=request_user)
-    user2 = UserDetail.objects.get(pk=base_user)
-    if task == 'promote' or task == 'demote' and user1.rank>14 and user1.rank>user2.rank:
-        if checkvacant(user2.rank+task_val[task]): 
-            user2.rank = user2.rank + task_val[task_val]
-            serializer = UserSerializer(user2)
-            return Response(serializer.data)
+    try:
+        request_user = request.data["request_user"]
+        base_user = request.data["base_user"]
+        task = request.data["task"]
+        user1 = UserDetail.objects.get(pk=request_user)
+        user2 = UserDetail.objects.get(pk=base_user)
+        print((task == 'promote' or task == 'demote') and user1.rank>14 and user1.rank>user2.rank)
+        if (task == 'promote' or task == 'demote') and user1.rank>14 and user1.rank>user2.rank:
+            print(check_rank_avl(user2.rank+task_val[task]))
+            if check_rank_avl(user2.rank+task_val[task]): 
+                user2.rank = user2.rank+task_val[task]
+                user2.promoted_date = datetime.now()
+                user2.save()
+                serializer = UserSerializer(user2)
+                return Response(serializer.data,status=status.HTTP_200_OK)
+            else: 
+                return Response(status=status.HTTP_429_TOO_MANY_REQUESTS)
         else: 
-            return Response({'error':"Sorry not quota available"})
-    else: 
-        return Response({'error':'Rank not enough for this command'})
+            return Response(status=status.HTTP_401_UNAUTHORIZED)
+    except:
+        return Response(status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
+
 
 
 
@@ -104,13 +123,6 @@ def add_xp(request,pk):
     return Response({'new_rank':False})
 
 
-def check_rank_avl(rank): 
-    if rank>11:
-        user1 = UserDetail.objects.filter(rank=rank)
-        return user1.count()<rank_avi[rank]
-    return True
-
-
     
 
     
@@ -142,7 +154,9 @@ def delete(request,id):
 
 
 def checkvacant(rank):
+    if rank<11: 
+        return True
     user1 = UserDetail.objects.filter(rank=rank)
-    return user1 < rank_avi[rank]
+    return len(user1) < rank_avi[rank]
 
 

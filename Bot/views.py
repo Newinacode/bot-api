@@ -6,22 +6,40 @@ from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from rest_framework import status
 from django.db.models import F
-from datetime import datetime
+from django.utils import timezone 
 
 rank_avi = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,8,8,4,2,2,1]
+temp_rank_avi = {
+    1:None, 
+    2:None, 
+    3:None, 
+    4:None,
+    5:None,
+    6:None,
+    7:None,
+    8:None,
+    9:None,
+    10:None,
+    11:None,
+    12:8, 
+    13:8,
+    14:4,
+    15:2, 
+    16:2, 
+    17:2
+}
 
 
-
-
+# utils to checck whether rank is full or not
 def check_rank_avl(rank): 
-    if rank>11:
+    if rank>11 and rank<17:
         user1 = UserDetail.objects.filter(rank=rank)
         return user1.count()<rank_avi[rank]
     return True
 
 
 
-
+# return all the memeber
 @api_view(['GET'])
 def list(request):
     queryset = UserDetail.objects.all()
@@ -29,6 +47,7 @@ def list(request):
     return Response(serializer.data)
 
 
+# return a user detail
 @api_view(['GET'])
 def retrive(request,pk=None):
     queryset = UserDetail.objects.all()
@@ -38,7 +57,7 @@ def retrive(request,pk=None):
 
 
 
-
+# Post to promote or demote user rank
 @api_view(['POST'])
 def update(request):
     task_val = {
@@ -49,14 +68,15 @@ def update(request):
         request_user = request.data["request_user"]
         base_user = request.data["base_user"]
         task = request.data["task"]
+
         user1 = UserDetail.objects.get(pk=request_user)
         user2 = UserDetail.objects.get(pk=base_user)
-        print((task == 'promote' or task == 'demote') and user1.rank>14 and user1.rank>user2.rank)
+
         if (task == 'promote' or task == 'demote') and user1.rank>14 and user1.rank>user2.rank:
-            print(check_rank_avl(user2.rank+task_val[task]))
             if check_rank_avl(user2.rank+task_val[task]): 
                 user2.rank = user2.rank+task_val[task]
-                user2.promoted_date = datetime.now()
+                user2.promoted_date = timezone.now()
+                user2.xp = (2**(user2.rank-2))*1000
                 user2.save()
                 serializer = UserSerializer(user2)
                 return Response(serializer.data,status=status.HTTP_200_OK)
@@ -69,43 +89,7 @@ def update(request):
 
 
 
-
-
-
-# @api_view(['POST'])
-# def update(request):
-#     request_user = request.data["request_user"]
-#     base_user = request.data["base_user"]
-#     task = request.data["task"]
-#     user1 = UserDetail.objects.get(pk=request_user)
-#     user2 = UserDetail.objects.get(pk=base_user)
-#     if task == 'promote' and user1.rank>14 and user1.rank>user2.rank:
-#         if checkvacant(user2.rank+1):
-#             user2.rank +=1 
-#             user2.xp = (2**(user2.rank-1))*1000
-#             user2.promoted_date = datetime.now()
-#             user2.save()
-#     else:
-#         return Response({'error':'Rank not enough to use command'})
-
-#     if task == 'demote' and user1.rank>14 and user1.rank>user2.rank: 
-#         if checkvacant(user2.rank-1):
-#             user2.rank -= 1
-#             user2.xp = (2**(user2.rank-1))*1000
-#             user2.promoted_date = datetime.now()
-#             user2.save()
-#         else:
-#             return Response({"error":"Sorry we cannot executed due to full in quota for user rank"})
-#     else: 
-#         return Response({'error':'Rank not enough to use command'})
-    
-    
-    
-#     serializer = UserSerializer(user2)
-#     return Response(serializer.data)
-
-
-
+# update user xp and rank if necessary
 @api_view(['POST'])
 def add_xp(request,pk):
     xp= request.data["xp"]
@@ -113,9 +97,9 @@ def add_xp(request,pk):
     user.xp = F('xp') + xp
     user.save()
     user.refresh_from_db()
-    if user.xp > (2**(user.rank-1))*1000 and check_rank_avl(user.rank+1): 
+    if user.xp >= (2**(user.rank-1))*1000 and check_rank_avl(user.rank+1): 
         user.rank = F('rank') + 1
-        user.promoted_date = datetime.now()
+        user.promoted_date = timezone.now()
         user.save()
         user.refresh_from_db()
         serializer = UserSerializer(user)
@@ -129,7 +113,7 @@ def add_xp(request,pk):
     # return Response(status=status.HTTP_400_BAD_REQUEST)
 
 
-
+# add new user
 @api_view(['POST'])
 def create(request):
     serializer = UserSerializer(data=request.data)
@@ -141,7 +125,7 @@ def create(request):
 
 
 
-
+# delete user
 @api_view(['delete'])
 def delete(request,id): 
     user = UserDetail.objects.get(id=id)
@@ -149,14 +133,7 @@ def delete(request,id):
     return Response(status=status.HTTP_200_OK)
 
 
-
-
-
-
-def checkvacant(rank):
-    if rank<11: 
-        return True
-    user1 = UserDetail.objects.filter(rank=rank)
-    return len(user1) < rank_avi[rank]
-
+# This function manages when someone left certain Post and promote the person who is queued for that rank
+def manage_rank(): 
+    pass
 
